@@ -1,0 +1,648 @@
+---
+title: "Exploratory Analysis of Daily Dog Walking Behaviour Using the WalkTheDogs Dataset"
+author: "Kyoko Schelfhout"
+date: "2026-03-22"
+output:
+  # pdf_document: 
+    # latex_engine: xelatex   # the pdf option removes all of the emoji's, which means also the ones inside of the plots, so it was chosen to knit to an html file instead
+  html_document: default
+---
+
+```{r setup, include=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Assignment BIT08: Walks, Weather & Weekdays: A Dog Walking Data Analysis
+
+## 🐾 Introduction 🐾
+
+This report presents an exploratory data analysis of the **WalkTheDogs** dataset. This dataset is a personal activity log collected over approximately 223 days by an individual tracking their daily step count alongside contextual lifestyle variables. 
+The dataset was sourced from the Stat2Data package, made publicly available via the R Datasets repository.
+
+
+The dataset contains 223 observations across 7 variables:
+
+\- **StepCount** = The total daily steps taken (raw count) (Numerical variable)
+
+\- **Kcal** = How many kilocalories were burned (kilocalories burned) (Numerical variable)
+
+\- **Miles** = The distance walked (in miles) (Numerical variable)
+
+\- **Weather** = The weather conditions on the day (*Shine*, *Cold*, *Rain*) (Categorical variable)
+
+\- **Day** = The day of the week (*Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday*) (Categorical variable)
+
+\- **Walk** = A binary indicator of whether the dogs were walked or not (1 = yes, 0 = no) (Categorical variable)
+
+\- **Steps** = The total daily steps taken (raw count, in thousands) (Numerical variable)
+
+
+The central question motivating this analysis is: **What factors are associated with the amount of times the dogs were walked?** 
+In particular, it will be looked into whether the frequency of walking the dogs is dependent on the weather conditions and day of the week.
+
+------------------------------------------------------------------------
+
+## 1 — 🐾 Installing and loading in the needed packages
+
+Before that the data is analysed, it is useful to check if the packages that are used in this assignment are already installed, to install them if they are not installed and to load them in with library.
+This is done automatically when executing the code block below.
+
+```{r packages, echo = TRUE , warning=FALSE , message=FALSE}
+my_packages <- installed.packages()[, "Package"]
+
+if (!("MetBrewer"      %in% my_packages)) install.packages("MetBrewer")
+if (!("ggplot2"        %in% my_packages)) install.packages("ggplot2")
+if (!("colorspace"     %in% my_packages)) install.packages("colorspace")
+if (!("fmsb"           %in% my_packages)) install.packages("fmsb")
+if (!("dplyr"          %in% my_packages)) install.packages("dplyr")
+if (!("tidyr"          %in% my_packages)) install.packages("tidyr")
+if (!("RColorBrewer"   %in% my_packages)) install.packages("RColorBrewer")
+if (!("tidyverse"   %in% my_packages)) install.packages("tidyverse")
+
+library(MetBrewer)
+library(ggplot2)
+library(colorspace)
+library(fmsb)
+library(dplyr)
+library(tidyr)
+library(RColorBrewer)
+library(tidyverse)
+```
+
+------------------------------------------------------------------------
+
+## 2 — 🐾 Load in the data from the url
+
+It was opted to load the data in from the url so that it is not required to download the dataset, this improves easier reproducibility of the analysis of this dataset. 
+However if it is desired to work with the downloaded dataset this is also possible and this is shown in the comments below the method that reads the data in from the url.
+
+```{r load-data}
+url <- "https://vincentarelbundock.github.io/Rdatasets/csv/Stat2Data/WalkTheDogs.csv"
+data <- read.csv(url, header = TRUE)
+
+## Reading in the data from the csv-file and saving it as "read":
+# For this it is needed to place the R markdown file in the same folder as the dataset or to specify the path to the dataset
+# data <- read.csv(file="WalkTheDogs.csv", header = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## 3 — 🐾 Data overview
+
+Before starting to analyse the data it is a good idea to take a look at the dataset and to inspect what variables are found inside the dataset.
+It is recommended to take a look at the structure, summary and dimensions of the dataset to understand the dataset before analyzing the data.
+
+```{r data-overview}
+str(data)     # The structure of the dataset
+summary(data)   # A summary of the data inside of the dataset
+dim(data)   # The dimensions of the dataset  (rows, columns)
+```
+
+------------------------------------------------------------------------
+
+## 4 — 🐾 Data preparation: creating subsets & small customizations
+
+With the data preparation subsets of the data are created which are needed in a further stage of the analysis. 
+In this step the subsets are made, the day of the week and the weather frequency is created and the desired weather labels are provided. Also the names of the weather types are made to start with a capital letter, the walk labels are created, the colors per weather type are specified and the weather symbols are specified. 
+Other customizations are mentioned in their respective code blocks.
+
+```{r data-prep}
+# Creating subsets of the data based on if the dogs were walked or if the dogs were not walked
+walks_0 <- data[data$Walk == 0, ]   # Days the dogs were NOT walked
+walks_1 <- data[data$Walk == 1, ]   # Days the dogs WERE walked
+
+# Day of week frequency
+day_counts <- table(data$Day)
+
+# Weather frequency (on the total amount of recorded days)
+weather_pct <- table(data$Weather)
+
+# Creating the weather labels
+weather_labels  <- c("Cold", "Rain", "Shine")
+
+# Re-coding the weather factor to add the capital letters and to change the 0 and 1 to "Not Walked" and "Walked"
+data$Weather <- factor(data$Weather,
+                       levels = c("cold", "rain", "shine"),
+                       labels = c("Cold", "Rain", "Shine"))
+
+data$Walk_Label <- factor(data$Walk,
+                          levels = c(0, 1),
+                          labels = c("Not Walked", "Walked"))
+
+# Customizing the colors and symbols to create customized plots
+weather_colors  <- c("Cold" = "gray80", "Rain" = "lightblue", "Shine" = "gold")
+
+weather_symbols <- c("Shine" = "🌞",
+                      "Rain"  = "☔️",
+                      "Cold"  = "❄️" )
+
+```
+
+------------------------------------------------------------------------
+
+## 5 — 🐾 Visualizations of the data
+
+In the next steps the data will be analyzed by making use of visual representations of parts of the data. It is important to note that the hypotheses mentioned for each plot are looked at separately before analyzing the results of the other plots and that these are based on the habits of the author of this data analysis.
+
+### 5.1 🐾 Horizontal Barplot - Dogwalk vs. Non-dogWalk Days 
+
+This horizontal barplot compares the total number of days on which the dogs were walked versus the amount of days they were not walked.
+
+**Hypothesis:** Days on which the dogs were walked are expected to outnumber the days on which the dogs were not walked, this because the dataset was created specifically to log dogwalking activity by the author of the dataset.
+
+```{r horizontal barplot}
+### Number of days when the dogs where walked, compared to number of days when they were not walked
+ggplot(data, aes(x = factor(Walk), fill = factor(Walk))) +
+  geom_bar() +  # Red/Brown-ish color for the dogs were not walked, green color for when they were walked (symbols added so that it is also clear for people who are affected by color blindness).
+   scale_fill_manual( values = c("0" = "#C17A5A", "1" = "#6B8F71"),
+                      labels = c("0" = "Not walked", "1" = "Walked"),
+                        name   = "Walk Status" ) +
+  # Placing symbols inside of the bars of the barplot
+  geom_text(stat = "count",
+            aes(label = after_stat(ifelse(x == 1,"💤🚫💤" , "🐕‍🦺🐕🦮"))),  
+            hjust = 1.5,                         # hjust places the symbol inside the bar
+            size = 6) +
+  # Place the frequency label outside of the bar of the barplot
+  geom_text(stat = "count", 
+            aes(label = after_stat(paste0(round(count / sum(count) * 100, 1), "%"))),  # To adjust it to the percentage instead of the count
+            hjust = -0.3,                         # hjust places the symbol inside the bar
+            color = c("#C17A5A","#6B8F71"),      
+            fontface = "bold",
+            size = 5) +
+  # Adding the title, x- and y-axis labels to the barplot
+  labs( title = "Comparison of the amount of days the dogs were walked,\n to when they were not walked",
+        x = "Walk Status",
+        y = "Number of Days",
+        subtitle = "Horizontal barplot represting the amount of dogwalk vs non-dogwalks days" ) +
+  theme_minimal(base_size = 14) +
+  coord_flip() + # To turn it into a horizontal barplot instead of a regular barplot
+  scale_y_continuous(expand = expansion(mult = c(0, 0.20))) # To add extra spacing on the right side (20% extra spacing), to give the labels more room/space
+```
+
+
+
+**Conclusion:** 
+The horizontal barplot highlights a striking imbalance in walking frequency, the dogs were not walked on the majority of the days recorded, accounting for 69,5% of the observed days (shown in the orange/red/brown). Compared to just 30,5% of the days where the author took the dogs out for a walk (shown in green). This suggests that despite weather and the day of the week potentially influencing when walks with the dogs occur, the overall walking rate remains quite low. This context is important for interpreting the rest of the analysis, as patterns in weather and day preferences are drawn from a relatively small proportion of days where dogwalks actually took place.
+
+------------------------------------------------------------------------
+
+### 5.2 🐾 Lollipop Chart - Weather frequency 
+
+This lollipop chart compares the total number of days on which the data was recorded based on the weather type frequency, this to see what weather type occurs the most and least frequently to put the results into perspective. 
+
+**Hypothesis:** For this part there will not be a hypothesis. This because the dataset does not include information about the geographic location where the data was collected, meaning the regional climate differences cannot be taken into account. Additionally, the time period covered is unknown, so seasonal effects cannot be considered. A dataset collected primarily in winter would naturally over-represent cold days, while one collected in summer would skew towards sunny conditions. Without knowing the year, it is also impossible to account for unusual weather events or anomalies. In short, the weather frequencies observed in this dataset reflect the conditions present during the data collection, not any broader or representative pattern, and should be interpreted with that limitation in mind.
+
+```{r weather-frequency}
+# This was going to be a pie chart, but considering the lecturers dislike or maybe even possible slight hatred towards the pie chart, the lollipop chart option was chosen.
+# source for the information regarding this plot type: https://r-graph-gallery.com/lollipop-plot.html (and links from that website page)
+
+# counting how often each weather type occurs and calculating what percentage of the total dataset each one represents (to place on top of the lollipop dots)
+weather_pct <- count(data, Weather)  # counts how many times each weather type (Cold, Rain, Shine) appears in the dataset
+weather_pct <- mutate(weather_pct,
+                      pct       = n / sum(n) * 100,  # divides each weather count by the total number of rows, then multiplies by 100 to get the percentage share of each weather type across the whole dataset
+                      pct_label = paste0(round(pct, 1), "%"))  # formats that percentage as a display string and appends the % sign
+
+# creating the lollipop plot with ggplot
+ggplot(weather_pct, 
+       aes(x = Weather, y = pct, color = Weather)) +
+  # The stick of the lollipop
+  geom_segment(aes(x = Weather, xend = Weather, y = 0, yend = pct),
+               linewidth = 1.2) +
+  # The circle at the top
+  geom_point(size = 10) +
+  # Percentage labels above the points/dots
+  geom_text(aes(label = pct_label),
+            vjust = -1.5,
+            size  = 4.5,
+            fontface = "bold") +
+  # Weather emojis inside the circles
+  geom_text(aes(label = weather_symbols[as.character(Weather)]),
+            size  = 7, # size of the weather emoji in the circle
+            color = "black",
+            vjust = 0.35, # vjust to try and center the emoji's vertically inside of the dots
+            hjust = 0.5) +   # hjust to center the emoji's horizontally in the dots
+  scale_color_manual(values = weather_colors) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(title    = "Weather Type Frequency",
+       subtitle = "Percentage of days per weather condition",
+       x        = "Weather Condition",
+       y        = "Frequency (%)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 12,
+                      face = "bold",
+                      color = weather_colors[levels(data$Weather)]),
+                      legend.position = "none")
+```
+
+
+
+**Conclusion:** 
+The lollipop chart shows the frequency distribution of weather conditions across the 223 recorded days. Sunny weather (shine) was by far the most common condition, occurring on over half of all days (53,4%). Cold weather was the second most frequent at 30,9%, while rain was the least common, accounting for only 15,7% of days. This uneven distribution means that conclusions drawn about walking behavior on rainy days should be interpreted with some caution, as the smaller number of rainy days makes those results less reliable compared to the other two weather conditions.
+
+
+### 5.3 🐾 Grouped Bar Chart - Walk Frequency by Day of the Week
+
+The chart below compares, for each day of the week, the number of days the dogs were walked (dark color) versus not walked (light color). 
+
+**Hypothesis:** It is expected that the dogs are walked more on Saturday and Sunday, because these are the weekend days and the days that most people have more spare time.
+
+```{r barplot-day-of-week, fig.height=6, fig.width=10}
+# Turning the days into numbers so the plot will be shown in the order of the days of the week ( https://rkabacoff.github.io/qacBase/articles/recodes.html ) (= the source from where I found this function and how to use it)
+recode_days <- function(df) {
+  df$Day2 <- df$Day
+  df$Day2[df$Day2 == "M"] <- "1"
+  df$Day2[df$Day2 == "T"] <- "2"
+  df$Day2[df$Day2 == "W"] <- "3"
+  df$Day2[df$Day2 == "R"] <- "4"
+  df$Day2[df$Day2 == "F"] <- "5"
+  df$Day2[df$Day2 == "S"] <- "6"
+  df$Day2[df$Day2 == "U"] <- "7"
+  df  }
+
+# Also placing the days as numbers into the subsets of non-dogwalk and dogwalk
+walks_0 <- recode_days(walks_0)
+walks_1 <- recode_days(walks_1)
+
+all_days             <- as.character(1:7)  # to change the number to characters so they would be seen as labels
+day_counts_walks     <- table(factor(walks_1$Day2, levels = all_days))  # counts how many times each day appears in the walked subset
+day_counts_non_walks <- table(factor(walks_0$Day2, levels = all_days))  # counts how many times each day appears in the non-walked subset
+
+# combines the walked and not-walked day counts into one tidy matrix (using row bind)
+combined_counts <- rbind(Walk      = day_counts_walks,
+                         'No Walk' = day_counts_non_walks)
+
+# Customizing the colors
+# Day of week frequency
+day_counts <- table(data$Day)
+original_colors <- met.brewer("Hokusai1", n = length(day_counts))  # choosing the Hokusai1 color palette for this plot
+light_colors    <- lighten(original_colors, amount = 0.5)  # colors for the non walk days
+bar_colors      <- as.vector(rbind(original_colors, light_colors))   # colors for the walk days
+ 
+# Calculate % walk and % non-walk per day
+total_per_day <- colSums(combined_counts)    # sum of combined_counts => gives the total count for each day  (so that the percentage per day can be calculated)
+pct_matrix    <- sweep(combined_counts, 2, total_per_day, "/") * 100    # sweep()  divides each column (margin 2) by the corresponding day's total from total_per_day, then multiplies by 100 (source: https://www.rdocumentation.org/packages/base/versions/3.6.2/topics/sweep )  
+pct_labels    <- paste0(round(pct_matrix, 1), "%")  # formatting the percentages as display strings + rounding each value to 1 decimal place and appends a % sign
+
+par(mfrow = c(1, 1), 
+    mar = c(8, 4, 4, 15), 
+    xpd = TRUE)
+
+# Making the barplot
+bp <- barplot( combined_counts,
+                beside    = TRUE,
+                col       = bar_colors,
+                names.arg = rep("", 7), # creating empty names so the ones colored the same as the plots can be added
+                main      = "Frequency of Walks vs. Non-Walks by Day of the Week",
+                xlab      = "Day of the Week",
+                ylab      = "Frequency",
+                ylim      = c(0, max(combined_counts) + 3),
+                xpd       = TRUE  )
+
+day_labels_full <- c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+pair_centers    <- colMeans(bp)
+
+# Relative percentage on top of each bar
+text(x      = bp,
+     y      = combined_counts + 0.5,
+     labels = pct_labels,
+     pos    = 3,
+     xpd    = TRUE,
+     col    = bar_colors,
+     cex    = 0.75  )
+
+# Colored day-name labels below x-axis
+text(x      = pair_centers,
+     y      = par("usr")[3] - 2,
+     labels = day_labels_full,
+     col    = original_colors,
+     xpd    = TRUE,
+     font   = 2   )
+
+# creating the legend
+legend(   x      = max(bp) + 1,
+          y      = max(combined_counts) + 3,
+          legend = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+                     "", "Dark colour = Walked the dogs", "Light colour = Did not walk the dogs"),
+          fill   = c(original_colors, NA, NA, NA),
+          border = c(rep("black", 7), NA, NA, NA),
+          bty    = "n",
+          cex    = 0.8,
+          xpd    = NA )
+```
+
+
+**Interpretation of the barplot:** 
+The numbers above the bars are the relative percentages that represent how many times the dogs were walked on that day or how many times they were not walked on that day in total of the amount of those days that were recorded. It was opted to place the relative frequencies above the bars because not every day was recorded the same amount of times and this made it easier to compare the results by day. The amount of dogwalk and non-dogwalk days can be found when the height of the bar is compared to the y-axis. From this barplot it can be seen that across all days of the week, non-dogwalk days consistently outnumber the dogwalk days, this is consistent with the information gathered from the first plot. However, there is a variation in dogwalk frequency by day. Sunday stands out as the day with the highest percentage of non-dogwalk days (82,1%), while Thursday has the lowest percentage of non-dogwalk days (61,8%). It was expected that the dogs would be walked more frequently during the weekend because that is when most people have more spare time, but from this plot it can be concluded that that hypothesis was wrong. The low percentage of dogwalk days on Sunday (17,9%) suggests that on Sunday the dog owner does either not have the time to walk the dogs or that the owner enjoys a sort of rest day on Sunday.
+Overall, the data suggests that in the middle of the week (Tuesday through Thursday) the dogs tend to be walked slightly more frequently, which may reflect the owner routines and availability rather than any other factors.
+
+------------------------------------------------------------------------
+
+### 5.4 🐾 Density plot - Miles Walked by Weather Condition 
+
+This density plot shows how many walks of different lengths occurred under each weather type. This plot is used to find out whether or not good weather encourages longer walks with the dogs. At the same time the bottom row of this plot shows the distance that the dogs owner walked when he did not take the dogs out for a walk that day per weather type. This means that this density plot shows the influence of the weather on the distance walked by the owner of the dogs and in relation to whether or not the dogs were walked and for how far the dogs were walked. 
+
+**Hypothesis:** It is expected that the dogs will be walked more frequently on days that the weather is good. It is also expected that the dogs will be walking a further distance on days on which the weather is good. Good weather is seen as days on which the sun shines in this case mentioned as shine. Besides these assumptions, it can also be suggested that the dogs will be walked more frequently on cold days than on days on which it rains. To conclude this small hypothesis: it is expected to see the highest walking frequency and the longest walking distance on days where the weather type is shine and it is expected that the least percentage of dogwalks and the shortest dogwalks occur on the days on which it rains.
+
+```{r clean_dogs}
+data$Walk_Label <- factor(data$Walk,
+                          levels = c(0, 1),
+                          labels = c("Not Walked", "Walked"))
+
+dogs_clean <- data |>     # Creating a new dataframe by piping the existing data to dogs_clean and leaving the original data unchanged 
+  mutate( Walk_Label = factor(Walk_Label, levels = c("Walked", "Not Walked")),
+          Weather    = factor(Weather,    levels = c("Shine", "Cold", "Rain"))  )           # Modifying columns in the dogs_clean dataframe
+
+```
+
+```{r densityplot, fig.width=8, fig.height=5}
+weather_colors <- c("Cold" = "gray80", "Rain" = "lightblue", "Shine" = "gold")
+strip_colors <- weather_colors[c("Shine", "Cold", "Rain", "Black","Black")]
+
+# Making the density plot (source: https://r-graph-gallery.com/density-plot.html and the more specific web pages linked to this page)
+ggplot(dogs_clean, aes(x = Miles, 
+                       fill = Weather)) +
+  geom_density(alpha = 0.7, 
+               color = NA) +
+  facet_grid(Walk_Label ~ Weather) +
+  scale_fill_manual(values = weather_colors) +
+  labs( x        = "Miles walked by the dogs owner",
+        y        = "Frequency of the lentgh of the walk",
+        title    = "Distribution of miles walked by the dog owner,\n when dogs were and weren't walked",
+        subtitle = "Seperated by weather condition" ) +
+  theme_minimal(base_size = 12) +
+  theme(
+      legend.position = "none",
+      strip.text.x = element_text(face = "bold", 
+                                  color = "black"
+                                  #color = weather_colors[c("Shine"="gold","Cold"= "gray80","Rain"= "lightblue")] (this does not work as desired)(I did not find a way to write Shine Cold and Rain in the same colors at the plots are shown)
+                                  ),
+      strip.text.y = element_text(face = "bold", 
+                                  color = "black"),
+      panel.grid.minor = element_blank(),
+      plot.title = element_text(face = "bold")
+        )
+```
+
+
+
+**Interpretation of the density plot:** 
+In the "Walked" row, the most distances cluster between 2,5 and 5 miles regardless of weather, suggesting that once the owner decides to walk the dog, the distance covered is not strongly influenced by weather. Cold weather shows a sharper, more concentrated peak, possibly indicating that the dogowner walks a fixed short route in bad weather conditions. In the "Not Walked" row, the distances are lower overall and slightly more spread out, which may reflect that the owner was active in other ways but chose not to bring the dog (work, commute, daily tasks etc). Weather does not appear to be a strong predictor of how far the owner walks (neither with the dogs present and without the dogs present). This means that the hypothesis did not prove to be correct.
+
+------------------------------------------------------------------------
+
+### 5.5 🐾 Violin & boxplot - Distribution of Walk Distances by Weather Type on dog walks
+
+The violin plot gives a fuller picture of how walk distances are distributed under each weather condition, with an embedded boxplot inside each violin showing the median and the interquartile range. The plots show the frequency of the walks on which the dogs were present and distance (in Miles) walked per weather type. It highlights whether or not good weather encourages longer walks or not. This plot shows the results of the "Walked" row of the density plot but shown in a violin plot with an embedded boxplot. 
+
+**Hypothesis:** It is expected that the walks with the most distance will occur on the days when the weather is good (shine). It is also expected that on the days when it rains, that the least amount of walks take place and that the length of these walks will also be shorter.
+
+```{r violin-weather, fig.alt="Violin plot of walk distances by weather condition"}
+# source:  https://r-graph-gallery.com/violin.html  &  https://r-graph-gallery.com/violin_and_boxplot_ggplot2.html
+ 
+# to write the weather type starting with a capital latter
+walks_1$Weather <- factor(walks_1$Weather,
+                          levels = c("cold", "rain", "shine"),
+                          labels = c("Cold", "Rain", "Shine"))
+
+walks_1$Weather <- factor(as.character(walks_1$Weather))  # turning them into factors
+
+# Creating the plots
+ggplot(walks_1, aes(x = Weather, 
+                    y = Miles, 
+                    fill = Weather)) +
+  # creating the violin plot
+  geom_violin(color = "black", 
+              trim = FALSE) +
+  # creating the boxplot
+  geom_boxplot(width = 0.1, 
+               fill = "white", 
+               color = "black", 
+               outlier.shape = NA) +
+  # to specify the custoizations (colors and labels)
+  scale_fill_manual(values = weather_colors, 
+                    labels = weather_labels) +
+  labs( title = "Distribution of Dog Walk Distances by Weather Type",
+        x     = "Weather",
+        y     = "Miles",
+        subtitle = "Violin and boxplot of the distances of the dogwalks in function of the weather type" ) +
+  theme_minimal() +
+  theme(  axis.text.x = element_text(size = 12, 
+          face = "bold",
+          color = weather_colors[levels(walks_1$Weather)]),
+          legend.position = "none"   )
+```
+
+
+
+**Interpretation of the violin and boxplot:**
+The median walk distance is fairly similar across all three weather conditions, sitting at around 3–4 miles. However, the shape of the violins tells a more interesting story. Cold weather produces a concentrated distribution, confirming that the owner tends to walk a predictable short distance in the cold. Rain shows a slightly wider spread with a small cluster of longer walks visible at the top. Shine has by far the widest and tallest violin plot, stretching past 10 miles, indicating that sunny weather not only maintains typical walk distances but also encourages the dog-owners to go on much longer walks. This suggests that weather has less influence on the average walk distance but a notable effect on the upper range or the outliers.
+But a conclusion can and may not be drawn from this plot alone, because this graphical representation only represents the days on which the dogs were walked and does not represent the frequency of the dogwalk days, the distance that the author walked without the dogs etc. 
+
+------------------------------------------------------------------------
+
+### 5.6 🐾 Barplot - Dogwalk vs non-dogwalk days across the different weather conditions
+
+The plot shows the frequency of dogwalk days versus non-dogwalk days across three weather conditions, cold, rain, and shine, as a barplot with percentage labels. Each pair of bars represents how often the dogs were and weren't walked under that weather condition, with weather-themed emojis inside each bar for visual flair. This to investigate the influence of the weather on dogwalk frequency. 
+
+**Hypothesis:** It is expected that good weather encourages dogwalk frequency and that the least percentage of dogwalks will occur on the rainy days. 
+
+```{r histogram-weather2, fig.alt="Histogram of frequency of walks per weather condition"}
+# Data has to be read in again to solve an error
+url <- "https://vincentarelbundock.github.io/Rdatasets/csv/Stat2Data/WalkTheDogs.csv"
+data <- read.csv(url, header = TRUE)
+
+# Re-coding the weather factor to add the capital letters and to change the 0 and 1 to "Not Walked" and "Walked"
+data$Weather <- factor(data$Weather, 
+                       levels = c("cold", "rain", "shine"),
+                       labels = c("Cold", "Rain", "Shine"))
+
+data$Walk_Label <- factor(data$Walk,
+                          levels = c(0, 1),
+                          labels = c("Not Walked", "Walked"))
+
+# to specify the colors, emoji's and lighter colors
+weather_colors <- c("Cold" = "gray80", "Rain" = "lightblue", "Shine" = "gold")
+weather_symbols <- c("Shine" = "🌞", "Rain" = "☔️", "Cold" = "❄️")
+weather_colors_lighter <- c("Cold"  = "#E6E6E6",  "Rain"  = "#D6ECF3", "Shine" = "#FFE34D" )
+Weather_colors_combined <- c("#E6E6E6","#CCCCCC", "#D6ECF3","#ADD8E6", "#FFE34D","#FFD700")
+
+# Pre-computing counts for both groups 
+count_data <- count(data, Weather, Walk_Label)   # combining the counts
+count_data <- mutate(group_by(count_data, Weather),   # source: https://bookdown.org/yih_huynh/Guide-to-R-Book/mutate.html
+                     pct = n / sum(n) * 100,
+                     pct_label = paste0(round(pct, 1), "%"))   # calculating the percentages within each weather group
+count_data <- ungroup(count_data)  # removing the groupings
+
+
+## making the plot (the plan was to make a histogram, but this did not work out due to the histogram requires a raw continuous variable)
+ggplot(data, aes(x = Weather, 
+                 fill = Weather, 
+                 alpha = Walk_Label)) +
+  geom_bar(position = "dodge", 
+           color = "black") +
+  # Frequency labels above bars
+  geom_text(  data = count_data,
+              aes(x = Weather, 
+                  y = n, # position of the percentages
+                  label = pct_label, 
+                  group = Walk_Label),
+              position = position_dodge(width = 0.9),
+              vjust = -0.5,
+              size = 4.5,
+              color = Weather_colors_combined,
+              inherit.aes = FALSE  ) +
+  # Emojis inside the bars (centered in middle the bars)
+  geom_text(  data = count_data,
+              aes(x = Weather, 
+                  y = n / 2,  # to center the symbols in the bars (length-wise)
+                  label = weather_symbols[as.character(Weather)],
+                  group = Walk_Label),
+              position = position_dodge(width = 0.9),
+              size = 7,
+              inherit.aes = FALSE  ) +
+  scale_fill_manual(values = weather_colors) +
+  scale_alpha_manual(values = c("Not Walked" = 0.35, "Walked" = 1.0), 
+                     name = "") +
+  labs(  title = "Dog Walks vs. Non-Walks by Weather Type",
+          x = "Weather Condition",
+          y = "Frequency",
+          subtitle = "Seperated by weather condition"   ) + 
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  theme_minimal() +
+  theme(  axis.text.x = element_text(size = 12, 
+          face = "bold",
+          color = weather_colors[levels(data$Weather)]),
+          legend.position = "top",
+          legend.text = element_text(size = 11)   ) +
+  guides(fill = "none")
+```
+
+
+
+**Interpretation of the barplot:** 
+The percentages on top of the bars represent the percentage of days when it was that weather type and whether or not the dogs were walked on those days. The darker colors represent the days on which the dogs were walked and the lighter color represents the days on which the dogs were not walked. From this plot it can be seen that the dogs were not walked more on the days on which the weather is good (shine), in fact the dogs were percentually walked the least when the weather type was shine (26,9%). This is contradictory to the hypothesis. Surprisingly, the dogs were walked the most, percentually speaking, on rainy days (45,7%). And as expected the dogs were not walked very often when the weather type is cold, only on 29% of the cold days the dogs were walked. This could be influenced by the general weather from where the dog-owner lives and what weather types occur most often there.    
+
+------------------------------------------------------------------------
+
+### 5.7 🐾 Spider / Radar Chart — Walk Rate by Day & Weather
+
+The spider chart shows, for each day and weather combination, what fraction of those days resulted in the dogs being walked, making it easy to spot which conditions are most (or least) likely to lead to a dogwalk. This reveals which days and conditions most strongly predict a day on which the dogs were walked.
+
+**Hypothesis: ** It is expected that the days on which the weather type is shine and when it is a weekend day, that the most dogwalks will occur and the dogwalks with the longest distance will occur during the weekends. It is also expected that the least amount of dogwalks will occur on rainy weekdays. 
+
+```{r spider-chart, fig.width=8, fig.height=7, fig.alt="Radar chart of walk rate by day and weather"}
+day_label_map <- c(M = "Monday", T = "Tuesday", W = "Wednesday", R = "Thursday", F = "Friday", S = "Saturday", U = "Sunday")   # label setup
+
+weather_order <- c("Cold", "Rain", "Shine")  # order setup
+
+# Building spider_data
+step1 <- mutate(data, Day = recode(Day, !!!day_label_map)) 
+step2 <- group_by(step1, Weather, Day)
+step3 <- summarise(step2, WalkRate = mean(Walk, na.rm = TRUE) * 100, .groups = "drop") 
+step4 <- pivot_wider(step3, names_from = Day, values_from = WalkRate, values_fill = 0) 
+spider_data <- arrange(step4, match(Weather, weather_order)) 
+
+# Reordering the days to get them in a clockwise order
+day_order <- c("Monday", "Sunday", "Saturday", "Friday", "Thursday", "Wednesday", "Tuesday")
+spider_data <- select(spider_data, Weather, any_of(day_order))
+
+mat <- as.data.frame(spider_data[, -1]) # Takes spider_data and drops the first column (the Weather column [, -1]), leaving only the day columns. And converts it to a plain data frame and stores it as mat.
+rownames(mat) <- spider_data$Weather  # assigns the weather labels (Cold, Rain, Shine) as the rownames of mat
+
+max_row  <- setNames(rep(100, ncol(mat)), names(mat))  # maximum boundary row for the radar chart
+min_row  <- setNames(rep(0,   ncol(mat)), names(mat)) # minimum boundary row for the radar chart
+radar_df <- rbind(max_row, min_row, mat) # creates the max, min, data  dataframe (min and max needed to scale the axisses)
+
+colors_fill <- c( cold  = adjustcolor("gray60",    alpha.f = 0.25),
+                  rain  = adjustcolor("lightblue", alpha.f = 0.25),
+                  shine = adjustcolor("gold",      alpha.f = 0.25)  ) #  the color vector for the filled polygon interiors, semi-transparent by using adjustcolor
+
+colors_border <- c(cold = "gray60", rain = "lightblue", shine = "gold")  # specify the colors for the border (I chose them a little darker so that the borders would be extra visible)
+
+par(mar = c(2, 2, 4, 2))
+
+# creating the radar chart
+radarchart( radar_df,
+            axistype    = 1,                 # the axis type
+            pcol        = colors_border,     # line color
+            pfcol       = colors_fill,       # fill color
+            plwd        = 2.5,               # line width (tried different values and chose the one I thought was a best fit)
+            plty        = 1,                 # line type
+            cglcol      = "grey50",          # color of the net 
+            cglty       = 1,                 # net line type
+            cglwd       = 0.8,               # net width
+            axislabcol  = "grey10",          # color of axis labels
+            vlcex       = 0.85,              # group labels size
+            caxislabels = c("0%", "25%", "50%", "75%", "100%"),      # vector of axis labels to display
+            title       = "Dog Walk Rate by Day of Week & Weather",  # to specify the title
+            calcex      = 0.7 )              # font size ofr the axis labels
+
+# adding a legend
+legend(   x      = "bottomright",  # specify the position of the legend
+          legend = c("Cold", "Rain", "Shine"),  # specify the names in the legend
+          col    = weather_colors,   
+          pt.bg  = colors_fill,
+          pch    = 21,
+          pt.cex = 1.8,
+          lwd    = 2,
+          bty    = "n",
+          cex    = 0.9,
+          text.col = c("gray60", "lightblue", "gold"))
+
+# Sources
+# mutate: https://www.rdocumentation.org/packages/plyr/versions/1.8.6/topics/mutate
+# summarise: https://www.rdocumentation.org/packages/plyr/versions/1.8.3/topics/summarise
+# pivot_wider: https://www.geeksforgeeks.org/r-language/pivot-wider-in-r/
+# arrange: https://www.rdocumentation.org/packages/dplyr/versions/1.0.10/topics/arrange
+# Basics about radarchart: https://r-graph-gallery.com/143-spider-chart-with-saveral-individuals.html & https://r-graph-gallery.com/spider-or-radar-chart.html
+# The customizations and legend: https://r-graph-gallery.com/143-spider-chart-with-saveral-individuals.html
+# adjustcolor: https://www.rdocumentation.org/packages/grDevices/versions/3.6.2/topics/adjustcolor 
+# setNames: https://www.rdocumentation.org/packages/stats/versions/3.5.2/topics/setNames 
+```
+
+
+
+**Interpretation of the result of the spider or radar chart:**
+The results largely contradict the hypothesis. Rain actually has the highest walk rates across most days of the week, with particularly strong rates on Monday, Tuesday and Wednesday, suggesting that the dogowner is not strongly deterred by rain when it comes to daily routine walks. Cold consistently sits in the middle range, hovering around 25–50% across most days with no clear weekend effect. Shine surprisingly has the lowest walk rates overall, rarely exceeding 25% on any given day, which is an unexpected finding given that sunny weather typically encourages outdoor activity. This may suggest that on sunny days, the owner of the dogs engages in other activities and walks the dog less routinely, or it could reflect a smaller sample size of sunny days in the dataset (which is checked with the lollipop chart and will be talked about in the conclusion).
+
+------------------------------------------------------------------------
+
+## 6 — 🐾 Conclusion
+
+### Conclusion per plot
+
+1. **Horizontal barplot**
+The horizontal barplot reveals that the dogs were not walked on the majority of the recorded days, with 69,5% of the recorded days being non-dogwalk days and only 30,5% being dogwalk days. This low overall walking rate is an important baseline for interpreting the rest of the analysis, as all further patterns in weather and day of the week preferences are drawn from a relatively small proportion of days.
+
+2. **Lollipop chart**
+The lollipop chart shows that sunny weather (shine) was the most common condition, occurring on 53,4% of all recorded days, followed by cold at 30,9% and Rain at only 15,7%. This uneven distribution is relevant context for the rest of the analysis, in particular, conclusions about rainy days should be interpreted cautiously given the limited number of rain observations.
+
+3. **Grouped barplot**
+The grouped barplot shows that non-dogwalk days consistently outnumber dogwalk days across every day of the week, confirming the pattern seen in the horizontal barplot. Contrary to the hypothesis, weekend days did not show higher walk rates, Sunday in fact had the lowest dogwalk rate at just 17,9%. Mid-week days, particularly Thursday, showed the highest relative dogwalk rates, suggesting that the owner's routine and availability play a bigger role than whether it is a weekend and they may be busy on the weekends.
+
+4. **Density plot**
+The density plot shows that once the owner decides to walk the dogs, the distance covered clusters consistently between 2,5 and 5 miles regardless of weather, suggesting that weather does not strongly influence how far the owner walks the dogs. On non-dogwalk days, distances are lower and more spread out, likely reflecting other daily activities without the dogs. The hypothesis that good weather leads to longer walks was not supported.
+
+5. **Violin plot & boxplot**
+The violin and boxplot confirm that median walk distances are similar across all weather conditions, around 3–4 miles. However, sunny weather (shine) produces a much wider distribution with walks extending beyond 10 miles, suggesting that while weather does not affect the typical walk distance, it does influence the upper range or outliers, sunny days occasionally inspire notably longer walks. This plot only reflects days when the dogs were walked, so it should not be used to draw conclusions about walk frequency.
+
+6. **Barplot (dogwalk vs. no-dogwalk by weather)**
+The barplot shows that, contrary to the expectations, the dogs were walked most frequently on rainy days (45,7% of rain days resulted in a dogwalk) and least frequently on sunny days (only 26,9% of shine days). Cold days fell in between at 29%. These unexpected finding suggests that the dogs owner may engage in other outdoor activities on sunny days rather than walking the dogs, or that the high frequency of sunny days simply provides more opportunities for non-dogwalk days to accumulate.
+
+7. **Spider/Radar chart**
+The radar chart further reinforces the surprising pattern seen in the barplot, rain consistently shows the highest walk rates across most days of the week, particularly on Monday, Tuesday and Wednesday, while shine has the lowest walk rates overall, rarely exceeding 25% on any given day. Cold sits in a middle range throughout the week. The hypothesis that sunny weekends would produce the most walks was not supported by the data.
+
+### 🐕 Full conclusion after the analysis of the dataset 🐕
+This exploratory analysis of the WalkTheDogs dataset set out to answer whether weather conditions and day of the week are associated with the frequency and distance of dog walks. The results revealed several findings that were contrary to the initial hypotheses.
+First and most strikingly, the overall dogwalking rate was low, the dogs were walked on only 30,5% of all recorded days. This means that whatever patterns emerge in the data, they are drawn from a minority of days, which is important to keep in mind when interpreting the results.
+Regarding weather, the analysis consistently showed that sunny weather (shine) was not associated with higher walking rate, in fact, the opposite was true. The barplot and radar chart both show that rainy days had the highest proportion of dog walks, while sunny days had the lowest. One possible explanation is that on sunny days the owner engages in other outdoor activities that do not involve the dogs, or that the sheer frequency of sunny days (53,4% of all days) simply produces more opportunities for non-dogwalk days to accumulate. That said, the violin plot did show that on the days when the dogs were walked in sunny weather, the distances were sometimes notably longer, suggesting that sunny weather encourages more ambitious walks when they do happen.
+Regarding day of the week, the hypothesis that weekends would produce the highest walk rates was also not supported. Sunday had the lowest walk rate of all days at just 17,9%, while mid-week days such as Thursday showed the highest relative rates. This suggests that the owner's daily routine and availability are stronger predictors of walking behavior than whether it is a weekend.
+Taken together, the findings suggest that neither good weather nor weekend days reliably predict when the dogs are walked. Instead, the data points more towards individual routine and habits as the primary driver of walking behavior. Future analysis could explore whether step count or kilocalorie data provide stronger predictors of walking frequency, or whether longer-term seasonal patterns emerge when the data is examined over time.
+
+------------------------------------------------------------------------
+
+## 7 — Session Info
+
+```{r session-info, warning=FALSE , message=FALSE}
+# sessionInfo()
+```
